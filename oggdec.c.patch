@@ -1,0 +1,110 @@
+--- oggdec.c.git	2018-08-08 09:37:48.563424010 -0400
++++ oggdec.c	2018-08-08 10:09:07.825691103 -0400
+@@ -23,32 +23,40 @@
+ #include <io.h>
+ #endif
+ 
+-#include <vorbis/vorbisfile.h>
++#include <ivorbisfile.h>
+ 
+-#include "i18n.h"
++#ifdef ENABLE_NLS
++#include <libintl.h>
++#define _(X) gettext(X)
++#else
++#define _(X) (X)
++#define textdomain(X)
++#define bindtextdomain(X, Y)
++#endif
++#ifdef gettext_noop
++#define N_(X) gettext_noop(X)
++#else
++#define N_(X) (X)
++#endif
+ 
+ struct option long_options[] = {
+     {"quiet", 0,0,'Q'},
+     {"help",0,0,'h'},
+     {"version", 0, 0, 'V'},
+-    {"bits", 1, 0, 'b'},
+-    {"endianness", 1, 0, 'e'},
+     {"raw", 0, 0, 'R'},
+-    {"sign", 1, 0, 's'},
+     {"output", 1, 0, 'o'},
+     {NULL,0,0,0}
+ };
+ 
++#define VERSIONSTRING "OggDec 1.4.0-134b784a4d2f03e3fb5a389edc1adb84029b3cd3 (Tremor)"
+ static int quiet = 0;
+ static int bits = 16;
+-static int endian = 0;
+ static int raw = 0;
+-static int sign = 1;
+ unsigned char headbuf[44]; /* The whole buffer */
+ char *outfilename = NULL;
+ 
+ static void version (void) {
+-    fprintf(stderr, _("oggdec from %s %s\n"), PACKAGE, VERSION);
++    fprintf(stdout, _("%s\n"), VERSIONSTRING);
+ }
+ 
+ static void usage(void)
+@@ -60,11 +68,6 @@
+     fprintf(stdout, _(" --quiet, -Q      Quiet mode. No console output.\n"));
+     fprintf(stdout, _(" --help,  -h      Produce this help message.\n"));
+     fprintf(stdout, _(" --version, -V    Print out version number.\n"));
+-    fprintf(stdout, _(" --bits, -b       Bit depth for output (8 and 16 supported)\n"));
+-    fprintf(stdout, _(" --endianness, -e Output endianness for 16-bit output; 0 for\n"
+-                      "                  little endian (default), 1 for big endian.\n"));
+-    fprintf(stdout, _(" --sign, -s       Sign for output PCM; 0 for unsigned, 1 for\n"
+-                      "                  signed (default 1).\n"));
+     fprintf(stdout, _(" --raw, -R        Raw (headerless) output.\n"));
+     fprintf(stdout, _(" --output, -o     Output to given filename. May only be used\n"
+                       "                  if there is only one input file, except in\n"
+@@ -76,7 +79,7 @@
+     int option_index = 1;
+     int ret;
+ 
+-    while((ret = getopt_long(argc, argv, "QhVb:e:Rs:o:", 
++    while((ret = getopt_long(argc, argv, "QhVRs:o:", 
+                     long_options, &option_index)) != -1)
+     {
+         switch(ret)
+@@ -92,19 +95,6 @@
+                 version();
+                 exit(0);
+                 break;
+-            case 's':
+-                sign = atoi(optarg);
+-                break;
+-            case 'b':
+-                bits = atoi(optarg);
+-                if(bits <= 8)
+-                    bits = 8;
+-                else
+-                    bits = 16;
+-                break;
+-            case 'e':
+-                endian = atoi(optarg);
+-                break;
+             case 'o':
+                 outfilename = strdup(optarg);
+                 break;
+@@ -263,7 +253,7 @@
+     int channels;
+     int samplerate;
+ 
+-    if (ov_open_callbacks(in, &vf, NULL, 0, OV_CALLBACKS_DEFAULT) < 0) {
++    if (ov_open(in, &vf, NULL, 0) < 0) {
+         fprintf(stderr, _("ERROR: Failed to open input as Vorbis\n"));
+         fclose(in);
+         return 1;
+@@ -302,7 +292,7 @@
+         }
+     }
+ 
+-    while((ret = ov_read(&vf, buf, buflen, endian, bits/8, sign, &bs)) != 0) {
++    while((ret = ov_read(&vf, buf, buflen, &bs)) != 0) {
+         if(bs != 0) {
+             vorbis_info *vi = ov_info(&vf, -1);
+             if(channels != vi->channels || samplerate != vi->rate) {
